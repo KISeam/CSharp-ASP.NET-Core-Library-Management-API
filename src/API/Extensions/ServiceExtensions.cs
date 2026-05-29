@@ -9,6 +9,10 @@ using LibraryAPI.Domain.Interfaces.Services;
 using LibraryAPI.Infrastructure.Data;
 using LibraryAPI.Infrastructure.Repositories;
 using LibraryAPI.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
+using Swashbuckle.AspNetCore.SwaggerGen;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace LibraryAPI.API.Extensions;
 
@@ -122,10 +126,9 @@ public static class ServiceExtensions
             };
 
             c.AddSecurityDefinition(jwtScheme.Reference.Id, jwtScheme);
-            c.AddSecurityRequirement(new OpenApiSecurityRequirement
-            {
-                { jwtScheme, Array.Empty<string>() }
-            });
+            
+            // Only add security requirement to endpoints that require authorization
+            c.OperationFilter<AuthorizeCheckOperationFilter>();
         });
 
         return services;
@@ -138,5 +141,45 @@ public static class ServiceExtensions
             opts.AddPolicy("AllowAll", policy =>
                 policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
         return services;
+    }
+}
+
+public class AuthorizeCheckOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        // Check if there is an [Authorize] attribute on the controller or action method
+        var hasAuthorize = (context.MethodInfo.DeclaringType != null &&
+                            context.MethodInfo.DeclaringType.GetCustomAttributes(true).OfType<AuthorizeAttribute>().Any())
+                           || context.MethodInfo.GetCustomAttributes(true).OfType<AuthorizeAttribute>().Any();
+
+        if (hasAuthorize)
+        {
+            // Also check if there is an [AllowAnonymous] attribute on the action method
+            var hasAllowAnonymous = context.MethodInfo.GetCustomAttributes(true).OfType<AllowAnonymousAttribute>().Any();
+
+            if (!hasAllowAnonymous)
+            {
+                operation.Responses.TryAdd("401", new OpenApiResponse { Description = "Unauthorized" });
+                operation.Responses.TryAdd("403", new OpenApiResponse { Description = "Forbidden" });
+
+                var jwtBearerScheme = new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Id = JwtBearerDefaults.AuthenticationScheme,
+                        Type = ReferenceType.SecurityScheme
+                    }
+                };
+
+                operation.Security = new List<OpenApiSecurityRequirement>
+                {
+                    new OpenApiSecurityRequirement
+                    {
+                        [ jwtBearerScheme ] = Array.Empty<string>()
+                    }
+                };
+            }
+        }
     }
 }

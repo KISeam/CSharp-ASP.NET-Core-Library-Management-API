@@ -3,94 +3,149 @@
  * Automatically loads and injects tokens into Swagger UI
  */
 
-(function() {
-  // Load auth service on Swagger page
-  const authScriptPath = '/auth-service.js';
-  
-  // Wait for window to load completely
-  window.addEventListener('load', function() {
-    // Inject auth service if not already loaded
-    if (typeof libraryAuth === 'undefined') {
-      const script = document.createElement('script');
-      script.src = authScriptPath;
-      script.async = true;
-      document.head.appendChild(script);
-    }
+(function () {
+  const STORAGE_KEY = "LibraryAPI_accessToken";
+  const USER_INFO_KEY = "LibraryAPI_userInfo";
+  const REFRESH_KEY = "LibraryAPI_refreshToken";
 
-    // Wait a bit for auth service to load
-    setTimeout(function() {
-      injectAuthTokenToSwagger();
-    }, 500);
+  // Wait for window to load completely
+  window.addEventListener('load', function () {
+    // Wait for Swagger UI to be initialized and window.ui to be available
+    let attempts = 0;
+    const maxAttempts = 50;
+
+    const interval = setInterval(function () {
+      attempts++;
+      if (window.ui && window.ui.getStore) {
+        clearInterval(interval);
+        initSwaggerPersistence(window.ui);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        console.warn('⚠️ Swagger UI window.ui not found after maximum attempts');
+      }
+    }, 100);
   });
 
-  function injectAuthTokenToSwagger() {
-    // Check if auth service is available
-    if (typeof libraryAuth === 'undefined') {
-      console.warn('Auth service not loaded yet');
-      return;
+  function initSwaggerPersistence(ui) {
+    const store = ui.getStore();
+
+    // 1. Try to restore token from localStorage on page load
+    const savedToken = localStorage.getItem(STORAGE_KEY);
+    if (savedToken) {
+      console.log('✅ Restoring LibraryAPI authorization from localStorage...');
+      store.dispatch(ui.authActions.authorize({
+        Bearer: {
+          name: "Bearer",
+          schema: {
+            type: "apiKey",
+            in: "header",
+            name: "Authorization"
+          },
+          value: savedToken
+        }
+      }));
+
+      // Render the auth badge if user info is present
+      const userInfo = loadUserInfo();
+      showAuthStatusInSwagger(userInfo, savedToken);
     }
 
-    // Wait for Swagger UI to be ready
-    const maxAttempts = 20;
-    let attempts = 0;
+    // 2. Subscribe to store changes to keep localStorage in sync
+    let lastAuthorizedState = null;
 
-    const injectInterval = setInterval(function() {
-      attempts++;
+    store.subscribe(() => {
+      try {
+        const state = store.getState();
+        const auth = state.get("auth");
+        if (!auth) return;
 
-      // Look for Swagger UI authorize button or token input
-      const authorizeBtn = document.querySelector('[aria-label="authorize"]') ||
-                          document.querySelector('button[aria-label="authorize"]');
-      
-      const tokenInput = document.querySelector('input[placeholder*="api_key"]') ||
-                        document.querySelector('input[placeholder*="Bearer"]');
+        const authorized = auth.get("authorized");
+        if (authorized === lastAuthorizedState) return;
 
-      if (authorizeBtn || tokenInput) {
-        clearInterval(injectInterval);
+        lastAuthorizedState = authorized;
 
-        const token = libraryAuth.loadAccessToken();
-        const user = libraryAuth.loadUserInfo();
-
-        if (token) {
-          console.log('✅ Injecting LibraryAPI token into Swagger UI');
-
-          // Try to set token via Swagger UI API if available
-          if (window.ui && window.ui.presets && window.ui.presets[0]) {
-            try {
-              // Swagger UI 4+ API
-              const persistAuthorizationPlugin = () => {
-                return {
-                  statePlugins: {
-                    auth: {
-                      actions: {
-                        authorize: () => {
-                          // Pre-populate with our token
-                          localStorage.setItem('swaggerUIBearerToken', token);
-                        }
-                      }
-                    }
-                  }
-                };
-              };
-            } catch (e) {
-              console.warn('Could not inject via Swagger UI API');
+        if (authorized && authorized.size > 0) {
+          const authJS = authorized.toJS();
+          let tokenValue = null;
+          for (const key in authJS) {
+            if (authJS[key] && authJS[key].value) {
+              tokenValue = authJS[key].value;
+              break;
             }
           }
 
-          // Add visual indicator
-          showAuthStatusInSwagger(user, token);
+          if (tokenValue) {
+            // Strip "Bearer " prefix if user accidentally pasted it in
+            if (tokenValue.toLowerCase().startsWith("bearer ")) {
+              tokenValue = tokenValue.substring(7).trim();
+            }
+
+            const currentSaved = localStorage.getItem(STORAGE_KEY);
+            if (currentSaved !== tokenValue) {
+              console.log('✅ Token authorized in Swagger. Saving to localStorage...');
+              localStorage.setItem(STORAGE_KEY, tokenValue);
+
+              // Decode JWT payload to sync user info for the badge
+              const userInfo = decodeJwtPayload(tokenValue);
+              if (userInfo) {
+                localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
+              }
+
+              showAuthStatusInSwagger(userInfo || loadUserInfo(), tokenValue);
+            }
+          }
+        } else {
+          // User logged out from Swagger UI
+          if (localStorage.getItem(STORAGE_KEY)) {
+            console.log('❌ Token removed in Swagger. Clearing localStorage...');
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(USER_INFO_KEY);
+            localStorage.removeItem(REFRESH_KEY);
+
+            const existingBadge = document.getElementById('auth-status-badge');
+            if (existingBadge) existingBadge.remove();
+          }
         }
-      } else if (attempts >= maxAttempts) {
-        clearInterval(injectInterval);
-        console.warn('Swagger UI not fully loaded, skipping auto-inject');
+      } catch (err) {
+        console.error('Error handling Swagger authorization synchronization:', err);
       }
-    }, 200);
+    });
+  }
+
+  function loadUserInfo() {
+    try {
+      const userJson = localStorage.getItem(USER_INFO_KEY);
+      return userJson ? JSON.parse(userJson) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function decodeJwtPayload(token) {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      const payload = JSON.parse(jsonPayload);
+
+      // Extract standard claims
+      const userId = payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || payload.sub;
+      const fullName = payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || payload.unique_name || "Swagger User";
+      const email = payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || payload.email;
+      const role = payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || payload.role;
+
+      return { id: userId, fullName, email, role };
+    } catch (e) {
+      console.warn("Failed to decode JWT payload", e);
+      return null;
+    }
   }
 
   function showAuthStatusInSwagger(user, token) {
     // Create auth status badge
-    const topbar = document.querySelector('.topbar');
-    if (!topbar) return;
-
     const existingBadge = document.getElementById('auth-status-badge');
     if (existingBadge) existingBadge.remove();
 
@@ -112,50 +167,31 @@
       font-family: 'Courier New', monospace;
     `;
 
-    const statusText = user 
+    const statusText = user
       ? `✅ Logged in as <strong>${user.fullName}</strong> (${user.role})`
-      : '⚠️ No user logged in';
+      : '⚠️ Token loaded successfully';
 
     badge.innerHTML = `
-      <div style="margin-bottom: 8px;">LibraryAPI Auth Status</div>
+      <div style="margin-bottom: 8px; color: #0ea5e9;">LibraryAPI Auth Status</div>
       <div style="font-size: 12px; color: #a0a0a0;">${statusText}</div>
       <div style="font-size: 11px; color: #64748b; margin-top: 6px;">
-        📦 Token in localStorage (LibraryAPI_*)
+        📦 Token: localStorage.LibraryAPI_accessToken
       </div>
     `;
 
     document.body.appendChild(badge);
 
-    // Remove badge after 10 seconds
-    setTimeout(function() {
+    // Remove badge after 8 seconds
+    setTimeout(function () {
       if (badge && badge.parentElement) {
         badge.style.opacity = '0';
-        badge.style.transition = 'opacity 0.3s ease';
-        setTimeout(function() {
+        badge.style.transition = 'opacity 0.5s ease';
+        setTimeout(function () {
           if (badge && badge.parentElement) {
             badge.parentElement.removeChild(badge);
           }
-        }, 300);
+        }, 500);
       }
-    }, 10000);
+    }, 8000);
   }
-
-  // Listen for page visibility changes (tab switch)
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden && typeof libraryAuth !== 'undefined') {
-      const token = libraryAuth.loadAccessToken();
-      const user = libraryAuth.loadUserInfo();
-      
-      if (token && user) {
-        console.log(`✅ Tab activated - User: ${user.fullName}`);
-      }
-    }
-  });
-
-  // Before page unload, save auth state
-  window.addEventListener('beforeunload', function() {
-    if (typeof libraryAuth !== 'undefined' && libraryAuth.isAuthenticated()) {
-      console.log('✅ Page unloading - Auth tokens saved in localStorage');
-    }
-  });
 })();

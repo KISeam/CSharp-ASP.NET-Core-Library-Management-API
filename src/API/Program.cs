@@ -35,6 +35,23 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<LibraryDbContext>();
 
     await db.Database.MigrateAsync();
+
+    // ── Ensure admin seed password is correct ────────────────
+    var admin = await db.Users
+        .IgnoreQueryFilters()
+        .FirstOrDefaultAsync(u => u.Email == "admin@library.com");
+
+    if (admin is not null)
+    {
+        const string defaultPassword = "Admin@123";
+        if (!BCrypt.Net.BCrypt.Verify(defaultPassword, admin.PasswordHash))
+        {
+            admin.PasswordHash = BCrypt.Net.BCrypt.HashPassword(defaultPassword, workFactor: 12);
+            db.Users.Update(admin);
+            await db.SaveChangesAsync();
+            Console.WriteLine("✅ Admin password hash fixed at startup.");
+        }
+    }
 }
 
 // ── Middleware ───────────────────────────────────────────────
@@ -57,13 +74,16 @@ app.UseSwaggerUI(c =>
 
     c.DisplayRequestDuration();
 
-    // Dark mode theme for Swagger UI
-    c.InjectStylesheet("/swagger-ui-dark.css");
+    // Persistence script for Swagger UI (runs in default light mode)
     c.InjectJavascript("/swagger-persistence.js");
 });
 
 // Serve static files (HTML, CSS, JS, etc.)
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        System.IO.Path.Combine(builder.Environment.ContentRootPath, "src", "API", "wwwroot"))
+});
 
 app.UseCors("AllowAll");
 
