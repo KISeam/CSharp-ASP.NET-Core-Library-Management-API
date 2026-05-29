@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LibraryAPI - Auth Test</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        color: #e0e0e0;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 40px;
+        padding: 20px;
+        background: rgba(30, 41, 59, 0.8);
+        border-radius: 12px;
+        border: 2px solid #0ea5e9;
+      }
+
+      h1 {
+        color: #0ea5e9;
+        margin-bottom: 10px;
+      }
+
+      .subtitle {
+        color: #a0a0a0;
+        font-size: 14px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+
+      .card {
+        background: rgba(30, 41, 59, 0.8);
+        border: 2px solid #3e3e42;
+        border-radius: 12px;
+        padding: 20px;
+        transition: all 0.3s ease;
+      }
+
+      .card:hover {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 20px rgba(14, 165, 233, 0.2);
+      }
+
+      .card h2 {
+        color: #0ea5e9;
+        margin-bottom: 15px;
+        font-size: 18px;
+      }
+
+      .form-group {
+        margin-bottom: 15px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+        color: #a0a0a0;
+        font-weight: 600;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #3e3e42;
+        border-radius: 6px;
+        background: #1e1e1e;
+        color: #e0e0e0;
+        font-size: 14px;
+        font-family: "Courier New", monospace;
+        transition: all 0.3s ease;
+      }
+
+      input:focus,
+      textarea:focus {
+        border-color: #0ea5e9;
+        outline: none;
+        box-shadow: 0 0 10px rgba(14, 165, 233, 0.2);
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        width: 100%;
+      }
+
+      button:hover {
+        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .status {
+        margin-top: 15px;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+
+      .status.success {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid #22c55e;
+        color: #22c55e;
+      }
+
+      .status.error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid #ef4444;
+        color: #ef4444;
+      }
+
+      .status.info {
+        background: rgba(14, 165, 233, 0.1);
+        border: 1px solid #0ea5e9;
+        color: #0ea5e9;
+      }
+
+      .button-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 15px;
+      }
+
+      .button-group button {
+        width: 100%;
+      }
+
+      .token-display {
+        background: #1e1e1e;
+        border: 1px solid #3e3e42;
+        border-radius: 6px;
+        padding: 12px;
+        margin-top: 15px;
+        font-size: 12px;
+        font-family: "Courier New", monospace;
+        color: #4ec9b0;
+        word-break: break-all;
+        max-height: 100px;
+        overflow-y: auto;
+      }
+
+      .auth-status {
+        background: rgba(14, 165, 233, 0.1);
+        border: 1px solid #0ea5e9;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 20px;
+      }
+
+      .auth-status h3 {
+        color: #0ea5e9;
+        margin-bottom: 10px;
+        font-size: 14px;
+      }
+
+      .auth-status p {
+        font-size: 13px;
+        color: #a0a0a0;
+        margin-bottom: 8px;
+      }
+
+      .auth-status strong {
+        color: #e0e0e0;
+      }
+
+      .success-text {
+        color: #22c55e;
+      }
+
+      .error-text {
+        color: #ef4444;
+      }
+
+      @media (max-width: 768px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .console {
+        background: #1e1e1e;
+        border: 1px solid #3e3e42;
+        border-radius: 6px;
+        padding: 15px;
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 12px;
+        font-family: "Courier New", monospace;
+        color: #4ec9b0;
+        margin-top: 20px;
+      }
+
+      .console-log {
+        margin-bottom: 8px;
+      }
+
+      .console-log.info {
+        color: #0ea5e9;
+      }
+      .console-log.success {
+        color: #22c55e;
+      }
+      .console-log.error {
+        color: #ef4444;
+      }
+      .console-log.warn {
+        color: #f59e0b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>📚 LibraryAPI Authentication Test</h1>
+        <p class="subtitle">
+          Test login, register, and token persistence with localStorage
+        </p>
+      </header>
+
+      <!-- Auth Status -->
+      <div class="auth-status">
+        <h3>Current Auth Status</h3>
+        <p>
+          Authenticated: <span id="auth-status" class="error-text">❌ NO</span>
+        </p>
+        <p>User: <span id="user-name">Not logged in</span></p>
+        <p>Role: <span id="user-role">N/A</span></p>
+        <p>
+          Storage: <span id="storage-status">❌ No tokens in localStorage</span>
+        </p>
+      </div>
+
+      <div class="grid">
+        <!-- Login Card -->
+        <div class="card">
+          <h2>🔐 Login</h2>
+          <div class="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              id="login-email"
+              value="admin@library.com"
+              placeholder="admin@library.com"
+            />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              id="login-password"
+              value="Admin@123"
+              placeholder="Admin@123"
+            />
+          </div>
+          <button onclick="handleLogin()">Login</button>
+          <div id="login-status" class="status" style="display: none"></div>
+        </div>
+
+        <!-- Register Card -->
+        <div class="card">
+          <h2>✍️ Register</h2>
+          <div class="form-group">
+            <label>First Name</label>
+            <input type="text" id="register-firstname" placeholder="John" />
+          </div>
+          <div class="form-group">
+            <label>Last Name</label>
+            <input type="text" id="register-lastname" placeholder="Doe" />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              id="register-email"
+              placeholder="john@example.com"
+            />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              id="register-password"
+              placeholder="Password@123"
+            />
+          </div>
+          <button onclick="handleRegister()">Register</button>
+          <div id="register-status" class="status" style="display: none"></div>
+        </div>
+
+        <!-- Token Display Card -->
+        <div class="card">
+          <h2>🔑 Access Token</h2>
+          <div id="access-token" class="token-display">
+            No token in localStorage
+          </div>
+        </div>
+
+        <!-- Actions Card -->
+        <div class="card">
+          <h2>⚙️ Actions</h2>
+          <div class="button-group">
+            <button onclick="handleRefreshToken()">🔄 Refresh Token</button>
+            <button
+              onclick="handleLogout()"
+              style="
+                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+              "
+            >
+              🚪 Logout
+            </button>
+          </div>
+          <button onclick="printConsole()" style="margin-top: 10px">
+            📋 Print Auth Status
+          </button>
+          <button onclick="checkLocalStorage()" style="margin-top: 10px">
+            📦 Check localStorage
+          </button>
+          <div id="action-status" class="status" style="display: none"></div>
+        </div>
+      </div>
+
+      <!-- Console -->
+      <div class="console" id="console"></div>
+    </div>
+
+    <script src="/auth-service.js"></script>
+    <script>
+      // Helper functions
+      function showStatus(elementId, message, type) {
+        const statusEl = document.getElementById(elementId);
+        statusEl.textContent = message;
+        statusEl.className = `status ${type}`;
+        statusEl.style.display = "block";
+
+        if (type === "success") {
+          setTimeout(() => {
+            statusEl.style.display = "none";
+          }, 5000);
+        }
+      }
+
+      function updateAuthUI() {
+        const isAuth = libraryAuth.isAuthenticated();
+        const user = libraryAuth.getUser();
+        const token = libraryAuth.loadAccessToken();
+
+        document.getElementById("auth-status").innerHTML = isAuth
+          ? '<span class="success-text">✅ YES</span>'
+          : '<span class="error-text">❌ NO</span>';
+
+        document.getElementById("user-name").textContent =
+          user?.fullName || "Not logged in";
+        document.getElementById("user-role").textContent = user?.role || "N/A";
+
+        const hasToken = !!token;
+        document.getElementById("storage-status").innerHTML = hasToken
+          ? '<span class="success-text">✅ Tokens saved (LibraryAPI_*)</span>'
+          : '<span class="error-text">❌ No tokens in localStorage</span>';
+
+        if (token) {
+          document.getElementById("access-token").textContent =
+            token.substring(0, 50) + "...";
+        } else {
+          document.getElementById("access-token").textContent =
+            "No token in localStorage";
+        }
+      }
+
+      async function handleLogin() {
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+
+        if (!email || !password) {
+          showStatus("login-status", "❌ Email and password required", "error");
+          return;
+        }
+
+        const result = await libraryAuth.login(email, password);
+
+        if (result.success) {
+          showStatus(
+            "login-status",
+            `✅ Logged in as ${result.user.fullName}`,
+            "success",
+          );
+          updateAuthUI();
+          addConsoleLog(
+            `✅ Login successful - ${result.user.fullName}`,
+            "success",
+          );
+        } else {
+          showStatus("login-status", `❌ ${result.error}`, "error");
+          addConsoleLog(`❌ Login failed - ${result.error}`, "error");
+        }
+      }
+
+      async function handleRegister() {
+        const firstName = document.getElementById("register-firstname").value;
+        const lastName = document.getElementById("register-lastname").value;
+        const email = document.getElementById("register-email").value;
+        const password = document.getElementById("register-password").value;
+
+        if (!firstName || !lastName || !email || !password) {
+          showStatus("register-status", "❌ All fields required", "error");
+          return;
+        }
+
+        const result = await libraryAuth.register(
+          firstName,
+          lastName,
+          email,
+          password,
+        );
+
+        if (result.success) {
+          showStatus(
+            "register-status",
+            `✅ Registered as ${result.user.fullName}`,
+            "success",
+          );
+          updateAuthUI();
+          addConsoleLog(
+            `✅ Register successful - ${result.user.fullName}`,
+            "success",
+          );
+        } else {
+          showStatus("register-status", `❌ ${result.error}`, "error");
+          addConsoleLog(`❌ Register failed - ${result.error}`, "error");
+        }
+      }
+
+      async function handleLogout() {
+        const result = await libraryAuth.logout();
+
+        if (result.success) {
+          showStatus(
+            "action-status",
+            "✅ Logged out - Tokens cleared",
+            "success",
+          );
+          updateAuthUI();
+          addConsoleLog("✅ Logged out successfully", "success");
+        } else {
+          showStatus("action-status", `❌ ${result.error}`, "error");
+        }
+      }
+
+      async function handleRefreshToken() {
+        if (!libraryAuth.isAuthenticated()) {
+          showStatus("action-status", "❌ Not authenticated", "error");
+          return;
+        }
+
+        const result = await libraryAuth.refreshAccessToken();
+
+        if (result.success) {
+          showStatus("action-status", "✅ Token refreshed", "success");
+          updateAuthUI();
+          addConsoleLog("✅ Token refreshed", "success");
+        } else {
+          showStatus("action-status", `❌ ${result.error}`, "error");
+          addConsoleLog(`❌ Refresh failed - ${result.error}`, "error");
+        }
+      }
+
+      function printConsole() {
+        libraryAuth.printAuthStatus();
+        addConsoleLog("✅ Auth status printed to browser console", "info");
+      }
+
+      function checkLocalStorage() {
+        const token = localStorage.getItem("LibraryAPI_accessToken");
+        const refresh = localStorage.getItem("LibraryAPI_refreshToken");
+        const user = localStorage.getItem("LibraryAPI_userInfo");
+
+        addConsoleLog(
+          `Access Token: ${token ? "✅ Present" : "❌ Missing"}`,
+          "info",
+        );
+        addConsoleLog(
+          `Refresh Token: ${refresh ? "✅ Present" : "❌ Missing"}`,
+          "info",
+        );
+        addConsoleLog(
+          `User Info: ${user ? "✅ Present" : "❌ Missing"}`,
+          "info",
+        );
+      }
+
+      function addConsoleLog(message, type = "info") {
+        const consoleEl = document.getElementById("console");
+        const logEl = document.createElement("div");
+        logEl.className = `console-log ${type}`;
+        logEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        consoleEl.appendChild(logEl);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      }
+
+      // Update UI on load
+      window.addEventListener("load", function () {
+        updateAuthUI();
+        addConsoleLog("✅ Page loaded - Auth service initialized", "success");
+        libraryAuth.printAuthStatus();
+      });
+
+      // Refresh UI every 2 seconds
+      setInterval(updateAuthUI, 2000);
+    </script>
+  </body>
+</html>
