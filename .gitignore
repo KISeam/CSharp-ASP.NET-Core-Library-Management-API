@@ -477,3 +477,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Environment files
+.env.development.local
+.env.test.local
+.env.production.local
+config.bat
